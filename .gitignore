@@ -1,0 +1,12 @@
+dataset/
+output/
+models/
+venv/
+.venv/
+__pycache__/
+*.pyc
+.vscode/
+*.pkl
+*.csv
+*.tsv
+*.log
