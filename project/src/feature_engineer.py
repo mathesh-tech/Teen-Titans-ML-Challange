@@ -1,5 +1,8 @@
+
+
 import pandas as pd
 import numpy as np
+import re
 from rapidfuzz import fuzz
 from sklearn.feature_extraction.text import TfidfVectorizer
 import logging
@@ -12,6 +15,8 @@ except ImportError:
     psutil = None
 
 logger = logging.getLogger(__name__)
+
+STREET_NUM_RE = re.compile(r'\b\d+\b')
 
 class FeatureEngineer:
     def __init__(self, chunk_size=100000):
@@ -35,8 +40,7 @@ class FeatureEngineer:
         logger.info("TF-IDF fitting complete.")
 
     def _extract_street_number(self, address: str) -> str:
-        import re
-        match = re.search(r'\b\d+\b', address)
+        match = STREET_NUM_RE.search(address)
         return match.group(0) if match else ""
 
     def _compute_features_chunk(self, chunk: pd.DataFrame, df_source: pd.DataFrame, df_target: pd.DataFrame) -> pd.DataFrame:
@@ -150,9 +154,10 @@ class FeatureEngineer:
         total_rows = 0
         start_time = time.time()
         
-        total_candidate_rows = sum(1 for _ in open(candidates_path)) - 1 if os.path.exists(candidates_path) else 0
+        delim = '\t' if str(candidates_path).endswith('.tsv') else ','
+        total_candidate_rows = sum(1 for _ in open(candidates_path, encoding='utf-8', errors='ignore')) - 1 if os.path.exists(candidates_path) else 0
             
-        for chunk in pd.read_csv(candidates_path, chunksize=self.chunk_size, dtype=str):
+        for chunk in pd.read_csv(candidates_path, sep=delim, chunksize=self.chunk_size, dtype=str):
             feat_chunk = self._compute_features_chunk(chunk, df_source, df_target)
             
             mode = 'w' if first_chunk else 'a'
