@@ -11,6 +11,9 @@ import logging
 import json
 import joblib
 import time
+import zipfile
+import shutil
+from collections import defaultdict
 import pandas as pd
 from pathlib import Path
 from typing import Tuple, Any
@@ -116,12 +119,12 @@ def main():
     logger.info(f"  Combined target pool: {df_target.shape}")
 
     # 4. Generate or Resume Candidates
-    candidate_path = os.path.join(OUTPUT_DIR, 'candidate_pairs.tsv')
+    candidate_path = os.path.join(OUTPUT_DIR, 'raw_candidate_pairs.tsv')
     if os.path.exists(candidate_path) and os.path.getsize(candidate_path) > 1000:
         logger.info(f"Auto-Resume: {candidate_path} already exists ({os.path.getsize(candidate_path):,} bytes). Skipping generation.")
     else:
-        logger.info("STEP 2: Generating candidate pairs for test data...")
-        gen = CandidateGenerator(chunk_size=100000, max_candidates_per_entity=2)
+        logger.info("STEP 2: Generating high-recall candidate pairs for test data...")
+        gen = CandidateGenerator(chunk_size=100000, max_candidates_per_entity=6)
         gen.generate(
             df_src1=df1_clean,
             df_src2=df2_clean,
@@ -229,14 +232,65 @@ def main():
     submission.to_csv(output_tsv_alt, sep='\t', index=False)
     submission.to_csv(output_csv, index=False)
     
+    # Generate official candidate_pairs.tsv format (one row per Source 1 entity)
+    logger.info("STEP 6: Generating official candidate_pairs.tsv format...")
+    cand_dict = defaultdict(list)
+    if os.path.exists(candidate_path):
+        with open(candidate_path, 'r', encoding='utf-8') as f:
+            f.readline() # header
+            for line in f:
+                parts = line.strip().split('\t')
+                if len(parts) == 2:
+                    cand_dict[parts[0]].append(parts[1])
+                    
+    official_cand_path = os.path.join(OUTPUT_DIR, 'candidate_pairs.tsv')
+    with open(official_cand_path, 'w', encoding='utf-8') as out:
+        out.write('source1_entity_id\tcandidate_entity_ids\n')
+        for s1_id in df1['entity_id']:
+            cands = cand_dict.get(s1_id)
+            val = ','.join(dict.fromkeys(cands)) if cands else ''
+            out.write(f'{s1_id}\t{val}\n')
+            
+    # Auto-bundle Teen_Titans_submission.zip
+    logger.info("STEP 7: Bundling Teen_Titans_submission.zip package...")
+    pkg_dir = os.path.join(BASE_DIR, 'temp_pkg')
+    os.makedirs(os.path.join(pkg_dir, 'output'), exist_ok=True)
+    os.makedirs(os.path.join(pkg_dir, 'code', 'business_entity_resolution', 'src'), exist_ok=True)
+    
+    shutil.copy2(output_tsv, os.path.join(pkg_dir, 'output', 'matching_results.tsv'))
+    shutil.copy2(official_cand_path, os.path.join(pkg_dir, 'output', 'candidate_pairs.tsv'))
+    
+    src_dir = os.path.join(BASE_DIR, 'src')
+    for f in os.listdir(src_dir):
+        if f.endswith('.py'):
+            shutil.copy2(os.path.join(src_dir, f), os.path.join(pkg_dir, 'code', 'business_entity_resolution', 'src', f))
+            
+    shutil.copy2(os.path.join(BASE_DIR, 'predict.py'), os.path.join(pkg_dir, 'code', 'business_entity_resolution', 'predict.py'))
+    shutil.copy2(os.path.join(BASE_DIR, 'train.py'), os.path.join(pkg_dir, 'code', 'business_entity_resolution', 'train.py'))
+    shutil.copy2(os.path.join(BASE_DIR, 'requirements.txt'), os.path.join(pkg_dir, 'code', 'business_entity_resolution', 'requirements.txt'))
+    
+    doc_src = r'C:\Users\Sridh\Downloads\6ab10eb3b23ba_student_resource (1)\student_resource\Documentation_template.md'
+    if os.path.exists(doc_src):
+        shutil.copy2(doc_src, os.path.join(pkg_dir, 'Documentation_template.md'))
+        
+    zip_path = os.path.join(BASE_DIR, 'Teen_Titans_submission.zip')
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirs, files in os.walk(pkg_dir):
+            for file in files:
+                full_path = os.path.join(root, file)
+                rel_path = os.path.relpath(full_path, pkg_dir)
+                zipf.write(full_path, rel_path)
+    shutil.rmtree(pkg_dir, ignore_errors=True)
+    
     logger.info("=" * 70)
-    logger.info(f"  PREDICTIONS COMPLETE")
+    logger.info(f"  PREDICTIONS & PACKAGING COMPLETE")
     logger.info(f"  Total Source 1 Records : {len(submission):,}")
     logger.info(f"  Records with Matches   : {len(submission[submission['matched_entity_ids'] != '']):,}")
     logger.info(f"  Records without Matches: {len(submission[submission['matched_entity_ids'] == '']):,}")
     logger.info(f"  Official Leaderboard Output : {output_tsv}")
     logger.info(f"  User Target Output          : {output_tsv_alt}")
-    logger.info(f"  CSV Copy                    : {output_csv}")
+    logger.info(f"  Candidate Pairs Output      : {official_cand_path}")
+    logger.info(f"  Final Submission Package    : {zip_path}")
     logger.info("=" * 70)
 
 if __name__ == "__main__":
