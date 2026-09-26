@@ -37,39 +37,31 @@ class CandidateGenerator:
     def _build_source1_index(self, df: pd.DataFrame, id_col: str = 'entity_id') -> dict:
         block_index = {
             'tokens': defaultdict(list),
-            'prefixes': defaultdict(list),
-            'streets': defaultdict(list)
+            'prefixes': defaultdict(list)
         }
         
         logger.info(f"Building Inverted Index for Source 1 ({len(df):,} records)...")
         
-        for _, row in tqdm(df.iterrows(), total=len(df), desc="Indexing S1", disable=True):
-            country = str(row.get('country', '')).strip()
-            name = str(row.get('business_name', '')).strip()
-            address = str(row.get('business_address', '')).strip()
+        for row in df.itertuples(index=False):
+            country = str(getattr(row, 'country', '')).strip()
+            name = str(getattr(row, 'business_name', '')).strip()
             
             if not country or not name:
                 continue
                 
-            record = {'id': row[id_col], 'name': name}
+            record = {'id': getattr(row, id_col), 'name': name}
             
-            # Block 1: All Tokens >= 3 chars excluding stop words
+            # Block 1: Distinct Tokens >= 3 chars excluding stop words
             tokens = set([t for t in name.split() if len(t) >= 3 and t not in STOP_WORDS])
             for token in tokens:
                 k1 = f"{country}_{token}"
                 block_index['tokens'][k1].append(record)
                 
-            # Block 2: Prefix
-            prefix = name[:5]
-            if len(prefix) >= 4:
+            # Block 2: Distinct 4-Prefix
+            prefix = name[:4]
+            if len(prefix) >= 4 and not prefix.startswith(tuple(STOP_WORDS)):
                 k2 = f"{country}_{prefix}"
                 block_index['prefixes'][k2].append(record)
-                
-            # Block 3: Street Number (>= 3 digits to avoid generic 1-digit/2-digit numbers)
-            street_number = self._get_street_number(address)
-            if street_number and len(street_number) >= 3:
-                k3 = f"{country}_{street_number}"
-                block_index['streets'][k3].append(record)
             
         # Prune large buckets
         pruned = 0
@@ -82,7 +74,6 @@ class CandidateGenerator:
         logger.info(f"Pruned {pruned} massive buckets > {self.skip_bucket_threshold} records.")
         logger.info(f"Total Tokens: {len(block_index['tokens']):,}")
         logger.info(f"Total Prefixes: {len(block_index['prefixes']):,}")
-        logger.info(f"Total Streets: {len(block_index['streets']):,}")
         
         return block_index
 
@@ -92,9 +83,12 @@ class CandidateGenerator:
         
         total_matches = 0
         pairs_since_last_flush = 0
-        flush_threshold = 10000
+        flush_threshold = 20000
         start_time = time.time()
         process = psutil.Process(os.getpid()) if psutil else None
+        
+        token_blocks = block_index['tokens']
+        prefix_blocks = block_index['prefixes']
         
         delim = '\t' if output_csv.endswith('.tsv') else ','
         with open(output_csv, mode, newline='', encoding='utf-8') as f:
@@ -103,42 +97,34 @@ class CandidateGenerator:
                 writer.writerow(['source1_entity_id', 'target_entity_id'])
                 f.flush()
             
-            for start_idx in tqdm(range(0, len(df_target), self.chunk_size), desc=f"Probing {target_name}", disable=True):
+            for start_idx in range(0, len(df_target), self.chunk_size):
                 end_idx = min(start_idx + self.chunk_size, len(df_target))
                 chunk = df_target.iloc[start_idx:end_idx]
                 
                 chunk_pairs = []
                 
-                for _, row in chunk.iterrows():
-                    country = str(row.get('country', '')).strip()
-                    name = str(row.get('business_name', '')).strip()
-                    address = str(row.get('business_address', '')).strip()
-                    if not country or not name: continue
+                for row in chunk.itertuples(index=False):
+                    country = str(getattr(row, 'country', '')).strip()
+                    name = str(getattr(row, 'business_name', '')).strip()
+                    if not country or not name:
+                        continue
                         
-                    target_id = row[target_id_col]
-                    
+                    target_id = getattr(row, target_id_col)
                     candidates_to_check = []
                     
                     # Probe Tokens
                     tokens = set([t for t in name.split() if len(t) >= 3 and t not in STOP_WORDS])
                     for token in tokens:
                         k1 = f"{country}_{token}"
-                        if k1 in block_index['tokens']:
-                            candidates_to_check.extend(block_index['tokens'][k1])
+                        if k1 in token_blocks:
+                            candidates_to_check.extend(token_blocks[k1])
                             
                     # Probe Prefix
-                    prefix = name[:5]
+                    prefix = name[:4]
                     if len(prefix) >= 4:
                         k2 = f"{country}_{prefix}"
-                        if k2 in block_index['prefixes']:
-                            candidates_to_check.extend(block_index['prefixes'][k2])
-                            
-                    # Probe Street Number
-                    street_number = self._get_street_number(address)
-                    if street_number and len(street_number) >= 3:
-                        k3 = f"{country}_{street_number}"
-                        if k3 in block_index['streets']:
-                            candidates_to_check.extend(block_index['streets'][k3])
+                        if k2 in prefix_blocks:
+                            candidates_to_check.extend(prefix_blocks[k2])
                     
                     seen_s1_ids = set()
                     scored_candidates = []
@@ -148,8 +134,12 @@ class CandidateGenerator:
                             continue
                         seen_s1_ids.add(s1_id)
                         
-                        # SIMD rapidfuzz with early exit score_cutoff
-                        score = fuzz.token_sort_ratio(name, match['name'], score_cutoff=50)
+                        m_name = match['name']
+                        if name == m_name:
+                            score = 100.0
+                        else:
+                            score = fuzz.token_sort_ratio(name, m_name, score_cutoff=50)
+                            
                         if score >= 50:
                             scored_candidates.append((score, s1_id))
                     
