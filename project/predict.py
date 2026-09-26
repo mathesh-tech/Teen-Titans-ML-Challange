@@ -111,32 +111,33 @@ def main():
 
     # 4. Generate Candidates
     logger.info("STEP 2: Generating candidate pairs for test data...")
-    gen = CandidateGenerator()
-    candidates = gen.generate(
+    candidate_path = os.path.join(OUTPUT_DIR, 'test_candidate_pairs.csv')
+    gen = CandidateGenerator(chunk_size=100000, max_candidates_per_entity=50)
+    gen.generate(
         df_src1=df1_clean,
         df_src2=df2_clean,
         df_src3=df3_clean,
-        output_path=os.path.join(OUTPUT_DIR, 'test_candidate_pairs.csv')
+        output_path=candidate_path
     )
-    logger.info(f"  Generated {len(candidates)} candidate pairs.")
-
-    if candidates.empty:
+    
+    if not os.path.exists(candidate_path) or os.path.getsize(candidate_path) == 0:
         logger.error("No candidates generated for test data. Cannot proceed with predictions.")
         sys.exit(1)
 
     # 5. Generate Features
     logger.info("STEP 3: Generating features for test candidates...")
-    engineer = FeatureEngineer()
-    
-    # Note: In a strict pipeline, TF-IDF vectorizers should be loaded from training.
-    # Here, fitting on the test set acts as transductive learning, which adapts to test distribution.
-    features_df = engineer.generate_features(
-        df_pairs=candidates,
+    features_path = os.path.join(OUTPUT_DIR, 'test_features.csv')
+    engineer = FeatureEngineer(chunk_size=100000)
+    engineer.generate_features(
+        candidates_path=candidate_path,
         df_source=df1_clean,
         df_target=df_target,
-        src_id_col='source1_entity_id',
-        tgt_id_col='target_entity_id'
+        output_path=features_path
     )
+    
+    logger.info("Loading generated features from disk...")
+    features_df = pd.read_csv(features_path)
+    candidates = pd.read_csv(candidate_path, dtype=str)
     
     # 6. Predict Probabilities
     logger.info("STEP 4: Predicting match probabilities...")
@@ -145,7 +146,9 @@ def main():
     feature_cols = [c for c in features_df.columns if c not in exclude_cols]
     
     X_test = features_df[feature_cols].astype(float)
-    y_prob = model.predict_proba(X_test)[:, 1]
+    
+    # lightgbm native booster returns 1D array of probabilities from predict()
+    y_prob = model.predict(X_test)
 
     # 7. Apply Threshold & Generate Output
     logger.info(f"STEP 5: Applying optimal threshold ({threshold})...")

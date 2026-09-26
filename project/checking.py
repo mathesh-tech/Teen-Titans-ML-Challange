@@ -53,10 +53,10 @@ def inspect_tsv(filepath: str, label: str, max_rows: int = 5):
 
 # Run checks on all dataset files
 FILES = [
-    ("dataset/train/train_source1.tsv",      "Source 1"),
-    ("dataset/train/train_source2.tsv",      "Source 2"),
-    ("dataset/train/train_source3.tsv",      "Source 3"),
-    ("dataset/train/train_ground_truth.tsv", "Ground Truth"),
+    ("dataset/train_source1.tsv",      "Source 1"),
+    ("dataset/train_source2.tsv",      "Source 2"),
+    ("dataset/train_source3.tsv",      "Source 3"),
+    ("dataset/train_ground_truth.tsv", "Ground Truth"),
 ]
 
 for path, label in FILES:

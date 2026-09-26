@@ -20,8 +20,8 @@ class DataLoader:
         logger.info(f"Loading data from {file_path}...")
 
         try:
-            df = pd.read_csv(file_path, sep=self.sep, dtype=str, encoding='utf-8', nrows=100000)
-            logger.info(f"Successfully loaded {filename} (limited to 100,000 rows).")
+            df = pd.read_csv(file_path, sep=self.sep, dtype=str, encoding='utf-8')
+            logger.info(f"Successfully loaded {filename}.")
 
             if expected_columns:
                 self._validate_columns(df, expected_columns, filename)

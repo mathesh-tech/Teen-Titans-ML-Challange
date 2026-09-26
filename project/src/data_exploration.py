@@ -2,105 +2,78 @@ import pandas as pd
 import sys
 from pathlib import Path
 
-def explore_dataset(df: pd.DataFrame, dataset_name: str):
-    """Prints comprehensive exploration statistics for a given DataFrame."""
+def explore_source(df: pd.DataFrame, dataset_name: str):
     print("=" * 70)
     print(f"--- Data Exploration for: {dataset_name} ---")
     print("=" * 70)
     
-    # 1. Total records
+    # 1. & 4. Row counts and Column names
     total_records = len(df)
-    print(f"1. Total records: {total_records}")
+    print(f"Total records: {total_records}")
+    print(f"Columns: {list(df.columns)}")
     
-    # 2. Unique countries
-    if 'country' in df.columns:
-        unique_countries = df['country'].dropna().unique()
-        print(f"2. Unique countries count: {len(unique_countries)}")
-        if len(unique_countries) <= 20:
-            print(f"   Country list: {list(unique_countries)}")
-    else:
-        print("2. Unique countries: 'country' column not found.")
+    # 2. Missing values
+    missing = df.isnull().sum()
+    print("\nMissing values:")
+    for col, count in missing.items():
+        pct = (count / total_records) * 100 if total_records > 0 else 0
+        print(f"  {col}: {count} ({pct:.2f}%)")
         
-    # 3. Missing names
-    if 'name' in df.columns:
-        missing_names = df['name'].isnull().sum()
-        pct = (missing_names / total_records) * 100 if total_records > 0 else 0
-        print(f"3. Missing names: {missing_names} ({pct:.2f}%)")
-    else:
-        print("3. Missing names: 'name' column not found.")
+    # 3. Duplicate entity_ids
+    if 'entity_id' in df.columns:
+        dups = df.duplicated(subset=['entity_id']).sum()
+        print(f"\nDuplicate entity_ids: {dups}")
         
-    # 4. Missing addresses
-    if 'address' in df.columns:
-        missing_addresses = df['address'].isnull().sum()
-        pct = (missing_addresses / total_records) * 100 if total_records > 0 else 0
-        print(f"4. Missing addresses: {missing_addresses} ({pct:.2f}%)")
-    else:
-        print("4. Missing addresses: 'address' column not found.")
-        
-    # 5. Business name length distribution
-    if 'name' in df.columns:
-        name_lengths = df['name'].dropna().astype(str).apply(len)
-        print("\n5. Business name length distribution (in characters):")
-        if not name_lengths.empty:
-            print(name_lengths.describe(percentiles=[.25, .5, .75, .90, .99]).to_string())
-        else:
-            print("   No valid name data to compute lengths.")
-    else:
-        print("\n5. Business name length distribution: 'name' column not found.")
-        
-    # 6. Address length distribution
-    if 'address' in df.columns:
-        addr_lengths = df['address'].dropna().astype(str).apply(len)
-        print("\n6. Address length distribution (in characters):")
-        if not addr_lengths.empty:
-            print(addr_lengths.describe(percentiles=[.25, .5, .75, .90, .99]).to_string())
-        else:
-            print("   No valid address data to compute lengths.")
-    else:
-        print("\n6. Address length distribution: 'address' column not found.")
-        
-    # 7. Sample records
-    print("\n7. Sample records (up to 5):")
-    if total_records > 0:
-        print(df.sample(min(5, total_records)).to_string(index=False))
-    else:
-        print("   Dataset is empty.")
     print("=" * 70 + "\n")
 
+def explore_ground_truth(df: pd.DataFrame, dataset_name: str):
+    print("=" * 70)
+    print(f"--- Data Exploration for: {dataset_name} ---")
+    print("=" * 70)
+    
+    total_records = len(df)
+    print(f"Total records: {total_records}")
+    print(f"Columns: {list(df.columns)}")
+    
+    missing = df.isnull().sum()
+    print("\nMissing values:")
+    for col, count in missing.items():
+        pct = (count / total_records) * 100 if total_records > 0 else 0
+        print(f"  {col}: {count} ({pct:.2f}%)")
+        
+    # 5. Analyze matched_entity_ids format
+    if 'matched_entity_ids' in df.columns:
+        valid_matches = df['matched_entity_ids'].dropna()
+        match_counts = valid_matches.apply(lambda x: len(str(x).split(',')))
+        print("\nMatched entity formats (number of matches per source1_id):")
+        print(match_counts.describe(percentiles=[.25, .5, .75, .90, .99]).to_string())
+        
+        # 6. Estimate positive match distribution
+        total_positive_pairs = match_counts.sum()
+        print(f"\nEstimated total positive pairs (if fully loaded): {total_positive_pairs:,}")
+        
+    print("=" * 70 + "\n")
 
 if __name__ == "__main__":
-    # Ensure the script can import from src directory properly
     sys.path.append(str(Path(__file__).resolve().parent.parent))
     from src.data_loader import DataLoader
     
     try:
         loader = DataLoader()
-        print("Attempting to load and explore datasets...\n")
+        print("Analyzing datasets...\n")
         
-        try:
-            df1 = loader.load_source1()
-            explore_dataset(df1, "train_source1.tsv")
-        except FileNotFoundError:
-            print("[Warning] train_source1.tsv not found in the dataset folder, skipping...\n")
-            
-        try:
-            df2 = loader.load_source2()
-            explore_dataset(df2, "train_source2.tsv")
-        except FileNotFoundError:
-            print("[Warning] train_source2.tsv not found in the dataset folder, skipping...\n")
-
-        try:
-            df3 = loader.load_source3()
-            explore_dataset(df3, "train_source3.tsv")
-        except FileNotFoundError:
-            print("[Warning] train_source3.tsv not found in the dataset folder, skipping...\n")
-            
-        try:
-            gt = loader.load_ground_truth()
-            explore_dataset(gt, "train_ground_truth.tsv")
-        except FileNotFoundError:
-            print("[Warning] train_ground_truth.tsv not found in the dataset folder, skipping...\n")
+        df1 = loader.load_source1()
+        explore_source(df1, "train_source1.tsv")
+        
+        df2 = loader.load_source2()
+        explore_source(df2, "train_source2.tsv")
+        
+        df3 = loader.load_source3()
+        explore_source(df3, "train_source3.tsv")
+        
+        gt = loader.load_ground_truth()
+        explore_ground_truth(gt, "train_ground_truth.tsv")
             
     except Exception as e:
-        print(f"An unexpected error occurred during exploration: {e}")
+        print(f"An error occurred: {e}")
         sys.exit(1)

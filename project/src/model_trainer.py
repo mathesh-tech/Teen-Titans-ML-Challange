@@ -6,6 +6,8 @@ import joblib
 import json
 import logging
 import os
+import numpy as np
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +20,7 @@ class ModelTrainer:
             'num_leaves': 64,
             'feature_fraction': 0.8,
             'bagging_fraction': 0.8,
+            'is_unbalance': True,  # Critical fix for label imbalance
             'verbose': -1,
             'random_state': 42
         }
@@ -61,7 +64,20 @@ class ModelTrainer:
         
         logger.info("Evaluating model on validation set...")
         y_prob = model.predict(X_val)
-        y_pred = (y_prob >= 0.5).astype(int)
+        
+        # Threshold tuning to maximize F1 Score
+        best_f1 = 0
+        best_thresh = 0.5
+        
+        for thresh in np.arange(0.1, 0.9, 0.05):
+            pred = (y_prob >= thresh).astype(int)
+            f = f1_score(y_val, pred, zero_division=0)
+            if f > best_f1:
+                best_f1 = f
+                best_thresh = thresh
+                
+        logger.info(f"Optimal Decision Threshold for max F1: {best_thresh:.2f}")
+        y_pred = (y_prob >= best_thresh).astype(int)
         
         acc = accuracy_score(y_val, y_pred)
         prec = precision_score(y_val, y_pred, zero_division=0)

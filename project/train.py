@@ -276,12 +276,12 @@ def run_pipeline():
                 "PIPELINE COMPLETED SUCCESSFULLY\n"
                 "================================================\n\n"
                 "Artifacts Generated:\n\n"
-                "✓ candidate_pairs.csv\n"
-                "✓ features.csv\n"
-                "✓ training_dataset.csv\n"
-                "✓ training_metrics.json\n"
-                "✓ run_summary.txt\n"
-                "✓ lightgbm_model.pkl\n\n"
+                "* candidate_pairs.csv\n"
+                "* features.csv\n"
+                "* training_dataset.csv\n"
+                "* training_metrics.json\n"
+                "* run_summary.txt\n"
+                "* lightgbm_model.pkl\n\n"
                 "================================================"
             )
             logger.info(f"\n{final_msg}")

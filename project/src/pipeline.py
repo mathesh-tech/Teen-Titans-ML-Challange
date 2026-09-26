@@ -114,7 +114,7 @@ def run_pipeline():
         model_save_path=os.path.join(MODEL_DIR, 'lightgbm_model.pkl'),
         metrics_save_path=os.path.join(OUTPUT_DIR, 'training_metrics.json')
     )
-    logger.info(f"  Precision: {metrics['precision']:.4f}  Recall: {metrics['recall']:.4f}  F0.5: {metrics['f0.5_score']:.4f}")
+    logger.info(f"  Precision: {metrics['precision']:.4f}  Recall: {metrics['recall']:.4f}  F1: {metrics['f1_score']:.4f}")
 
     # ── Step 7: Optimize Threshold ───────────────────────────────────────────
     logger.info("STEP 7: Optimizing probability threshold...")
@@ -142,7 +142,7 @@ def run_pipeline():
     logger.info("=" * 70)
     logger.info(f"  PIPELINE COMPLETE")
     logger.info(f"  Best Threshold : {best['best_threshold']}")
-    logger.info(f"  Best F0.5 Score: {best['best_metrics']['f0.5_score']:.4f}")
+    logger.info(f"  Best F1 Score  : {best['best_metrics']['f1_score']:.4f}")
     logger.info(f"  Best Precision : {best['best_metrics']['precision']:.4f}")
     logger.info(f"  Best Recall    : {best['best_metrics']['recall']:.4f}")
     logger.info("=" * 70)
