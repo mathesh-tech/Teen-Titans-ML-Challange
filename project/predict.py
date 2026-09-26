@@ -112,7 +112,7 @@ def main():
     # 4. Generate Candidates
     logger.info("STEP 2: Generating candidate pairs for test data...")
     candidate_path = os.path.join(OUTPUT_DIR, 'candidate_pairs.tsv')
-    gen = CandidateGenerator(chunk_size=100000, max_candidates_per_entity=50)
+    gen = CandidateGenerator(chunk_size=100000, max_candidates_per_entity=2)
     gen.generate(
         df_src1=df1_clean,
         df_src2=df2_clean,
