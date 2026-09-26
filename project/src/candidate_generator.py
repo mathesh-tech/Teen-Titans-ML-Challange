@@ -26,7 +26,7 @@ class CandidateGenerator:
     def __init__(self, chunk_size: int = 100000, max_candidates_per_entity: int = 5):
         self.chunk_size = chunk_size
         self.max_candidates_per_entity = max_candidates_per_entity
-        self.skip_bucket_threshold = 2000
+        self.skip_bucket_threshold = 1000
 
     def _get_street_number(self, address: str) -> str:
         if pd.isna(address): return ""
@@ -118,13 +118,16 @@ class CandidateGenerator:
                         k1 = f"{country}_{token}"
                         if k1 in token_blocks:
                             candidates_to_check.extend(token_blocks[k1])
+                            if len(candidates_to_check) >= 60:
+                                break
                             
                     # Probe Prefix
-                    prefix = name[:4]
-                    if len(prefix) >= 4:
-                        k2 = f"{country}_{prefix}"
-                        if k2 in prefix_blocks:
-                            candidates_to_check.extend(prefix_blocks[k2])
+                    if len(candidates_to_check) < 60:
+                        prefix = name[:4]
+                        if len(prefix) >= 4:
+                            k2 = f"{country}_{prefix}"
+                            if k2 in prefix_blocks:
+                                candidates_to_check.extend(prefix_blocks[k2])
                     
                     seen_s1_ids = set()
                     scored_candidates = []
