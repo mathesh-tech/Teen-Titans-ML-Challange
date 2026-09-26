@@ -90,8 +90,9 @@ class CandidateGenerator:
         start_time = time.time()
         process = psutil.Process(os.getpid()) if psutil else None
         
+        delim = '\t' if output_csv.endswith('.tsv') else ','
         with open(output_csv, mode, newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
+            writer = csv.writer(f, delimiter=delim)
             if write_header:
                 writer.writerow(['source1_entity_id', 'target_entity_id'])
                 f.flush()

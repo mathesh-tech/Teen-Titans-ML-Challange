@@ -111,7 +111,7 @@ def main():
 
     # 4. Generate Candidates
     logger.info("STEP 2: Generating candidate pairs for test data...")
-    candidate_path = os.path.join(OUTPUT_DIR, 'test_candidate_pairs.csv')
+    candidate_path = os.path.join(OUTPUT_DIR, 'candidate_pairs.tsv')
     gen = CandidateGenerator(chunk_size=100000, max_candidates_per_entity=50)
     gen.generate(
         df_src1=df1_clean,
@@ -137,7 +137,7 @@ def main():
     
     logger.info("Loading generated features from disk...")
     features_df = pd.read_csv(features_path)
-    candidates = pd.read_csv(candidate_path, dtype=str)
+    candidates = pd.read_csv(candidate_path, sep='\t', dtype=str)
     
     # 6. Predict Probabilities
     logger.info("STEP 4: Predicting match probabilities...")
@@ -174,16 +174,20 @@ def main():
     submission = all_s1_ids.merge(submission, on='source1_entity_id', how='left')
     submission['matched_entity_ids'] = submission['matched_entity_ids'].fillna('')
     
-    # Save predictions
-    output_file = os.path.join(OUTPUT_DIR, 'predictions.csv')
-    submission.to_csv(output_file, index=False)
+    # Save submission files: matching_results.tsv (official leaderboard file) & predictions.csv
+    output_tsv = os.path.join(OUTPUT_DIR, 'matching_results.tsv')
+    output_csv = os.path.join(OUTPUT_DIR, 'predictions.csv')
+    
+    submission.to_csv(output_tsv, sep='\t', index=False)
+    submission.to_csv(output_csv, index=False)
     
     logger.info("=" * 70)
     logger.info(f"  PREDICTIONS COMPLETE")
     logger.info(f"  Total Source 1 Records : {len(submission)}")
     logger.info(f"  Records with Matches   : {len(submission[submission['matched_entity_ids'] != ''])}")
     logger.info(f"  Records without Matches: {len(submission[submission['matched_entity_ids'] == ''])}")
-    logger.info(f"  Output saved to        : {output_file}")
+    logger.info(f"  Official Leaderboard Output : {output_tsv}")
+    logger.info(f"  CSV Copy                    : {output_csv}")
     logger.info("=" * 70)
 
 if __name__ == "__main__":
