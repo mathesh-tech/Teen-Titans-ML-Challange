@@ -174,11 +174,13 @@ def main():
     submission = all_s1_ids.merge(submission, on='source1_entity_id', how='left')
     submission['matched_entity_ids'] = submission['matched_entity_ids'].fillna('')
     
-    # Save submission files: matching_results.tsv (official leaderboard file) & predictions.csv
+    # Save submission files: matching_results.tsv (official leaderboard file), matching_result.tsv & predictions.csv
     output_tsv = os.path.join(OUTPUT_DIR, 'matching_results.tsv')
+    output_tsv_alt = os.path.join(OUTPUT_DIR, 'matching_result.tsv')
     output_csv = os.path.join(OUTPUT_DIR, 'predictions.csv')
     
     submission.to_csv(output_tsv, sep='\t', index=False)
+    submission.to_csv(output_tsv_alt, sep='\t', index=False)
     submission.to_csv(output_csv, index=False)
     
     logger.info("=" * 70)

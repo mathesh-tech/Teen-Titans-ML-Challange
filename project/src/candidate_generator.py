@@ -16,11 +16,17 @@ from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
+STOP_WORDS = {
+    'private', 'limited', 'corporation', 'company', 'corp', 'inc', 'llc',
+    'pvt', 'ltd', 'the', 'and', 'for', 'group', 'services', 'solutions',
+    'enterprises', 'industries', 'international', 'technologies', 'india'
+}
+
 class CandidateGenerator:
-    def __init__(self, chunk_size: int = 100000, max_candidates_per_entity: int = 150):
+    def __init__(self, chunk_size: int = 100000, max_candidates_per_entity: int = 5):
         self.chunk_size = chunk_size
         self.max_candidates_per_entity = max_candidates_per_entity
-        self.skip_bucket_threshold = 20000
+        self.skip_bucket_threshold = 2000
 
     def _get_street_number(self, address: str) -> str:
         if pd.isna(address): return ""
@@ -47,21 +53,21 @@ class CandidateGenerator:
                 
             record = {'id': row[id_col], 'name': name}
             
-            # Block 1: All Tokens >= 3 chars
-            tokens = set([t for t in name.split() if len(t) >= 3])
+            # Block 1: All Tokens >= 3 chars excluding stop words
+            tokens = set([t for t in name.split() if len(t) >= 3 and t not in STOP_WORDS])
             for token in tokens:
                 k1 = f"{country}_{token}"
                 block_index['tokens'][k1].append(record)
                 
             # Block 2: Prefix
             prefix = name[:5]
-            if len(prefix) >= 3:
+            if len(prefix) >= 4:
                 k2 = f"{country}_{prefix}"
                 block_index['prefixes'][k2].append(record)
                 
-            # Block 3: Street Number
+            # Block 3: Street Number (>= 3 digits to avoid generic 1-digit/2-digit numbers)
             street_number = self._get_street_number(address)
-            if street_number:
+            if street_number and len(street_number) >= 3:
                 k3 = f"{country}_{street_number}"
                 block_index['streets'][k3].append(record)
             
@@ -114,7 +120,7 @@ class CandidateGenerator:
                     candidates_to_check = []
                     
                     # Probe Tokens
-                    tokens = set([t for t in name.split() if len(t) >= 3])
+                    tokens = set([t for t in name.split() if len(t) >= 3 and t not in STOP_WORDS])
                     for token in tokens:
                         k1 = f"{country}_{token}"
                         if k1 in block_index['tokens']:
@@ -122,38 +128,34 @@ class CandidateGenerator:
                             
                     # Probe Prefix
                     prefix = name[:5]
-                    if len(prefix) >= 3:
+                    if len(prefix) >= 4:
                         k2 = f"{country}_{prefix}"
                         if k2 in block_index['prefixes']:
                             candidates_to_check.extend(block_index['prefixes'][k2])
                             
                     # Probe Street Number
                     street_number = self._get_street_number(address)
-                    if street_number:
+                    if street_number and len(street_number) >= 3:
                         k3 = f"{country}_{street_number}"
                         if k3 in block_index['streets']:
                             candidates_to_check.extend(block_index['streets'][k3])
                     
                     seen_s1_ids = set()
                     scored_candidates = []
-                    
                     for match in candidates_to_check:
                         s1_id = match['id']
-                        if s1_id in seen_s1_ids: continue
+                        if s1_id in seen_s1_ids:
+                            continue
                         seen_s1_ids.add(s1_id)
                         
-                        # Only calculate fuzz if necessary, or just calculate it
-                        score = fuzz.token_sort_ratio(name, match['name'])
-                        
-                        # Apply a loose pre-filter to drop absolute garbage (score < 30)
-                        if score >= 30:
+                        # SIMD rapidfuzz with early exit score_cutoff
+                        score = fuzz.token_sort_ratio(name, match['name'], score_cutoff=50)
+                        if score >= 50:
                             scored_candidates.append((score, s1_id))
-                        
+                    
                     if scored_candidates:
-                        # Sort descending by score, keep top N
                         scored_candidates.sort(key=lambda x: x[0], reverse=True)
                         top_candidates = scored_candidates[:self.max_candidates_per_entity]
-                        
                         for score, s1_id in top_candidates:
                             chunk_pairs.append((s1_id, target_id))
                 
